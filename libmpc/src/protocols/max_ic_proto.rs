@@ -14,8 +14,8 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
     let mut alpha_it = p.offlinedata.alpha.iter();
     let mut beaver_it = p.offlinedata.beavers.iter();
     /*Start: Debug info */
-    //let x_org = p.netlayer.exchange_ring_vec(x.clone()).await;
-    //println!("[{:?}]", x_org);
+    let x_org = p.netlayer.exchange_ring_vec(x.clone()).await;
+    println!("start:{:?}", x_org);
     /*End:   Debug info */
     while x_len > 1{
        
@@ -49,7 +49,7 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
 
         for i in 0..x_len/2{
             let mul_result = my_beavers[i].mul_compute(is_server, &msg_beavers[i*2], &msg_beavers[i*2+1]);
-            let max_of_two = x_share[i*2+1] + mul_result;
+            let max_of_two = x_share[i*2+1] + mul_result; // fix the way to compute greaterthan function. fzhang, 0921 update
             t.push(max_of_two); 
         }
         /**************************************END   COMPUTE GREATERTHAN****************************/    
@@ -63,9 +63,9 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
         x_share.clear();
         x_share.extend(t.clone());
         x_len = x_share.len();  //an important bug is fixed here. fzhang, 0921
-         /*Start: Debug info */
-         let x_layer = p.netlayer.exchange_ring_vec(x_share.clone()).await;
-         println!("[{:?}]", x_layer);
+        /*Start: Debug info */
+        let x_layer = p.netlayer.exchange_ring_vec(x_share.clone()).await;
+        println!("step:{:?}]", x_layer);
         /*End:   Debug info */
     }
     x_share[0]  
@@ -77,24 +77,37 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
  /****************************************************************************************************************************************************/
 pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>) -> RingElm{
     let x_len = x_share.len();
-    
+    /*Start: Debug info */
+    let x_org = p.netlayer.exchange_ring_vec(x_share.clone()).await;
+    println!("start:{:?}", x_org);
+    /*End:   Debug info */
     let is_server = p.netlayer.is_server;
     let mut ic_key_it = p.offlinedata.ic_key.iter();
     let mut alpha_it = p.offlinedata.alpha.iter();
     let mut beaver_it = p.offlinedata.beavers.iter();
-    
     let h = ((x_len+1) as f64).log(2 as f64).ceil() as usize; //the depth of the logic tree that has x_len nodes   
-    let mut start_index = 2 << (h-1) - 1; //the start index of the nodes to be handled
+    let mut start_index = (1 << (h-1)) - 1; //the start index of the nodes to be handled
     let mut end_index = x_len - 1;  //the end index of the nodes to be handled
+    
     for i in (1..h).rev(){
-        let rchildren = ((start_index+1)..=end_index).step_by(2);
-        let lchildren = ((start_index)..=end_index).step_by(2);
-
+        //println!("h = {}, start_index = {}, end_index = {}", i, start_index, end_index);
+        let mut lchildren = Vec::<usize>::new();
+        let mut rchildren = Vec::<usize>::new();
+        for j in start_index..=end_index{
+            if j & 0x1 == 1{
+                lchildren.push(j);
+            } 
+            else {
+                rchildren.push(j);
+            }
+        }
+      
         /*******************************START: COMPARE THE RIGHT CHILDREN TO THEIR PARENT****************************************/
         let handle_rchildren = {
             let mut msg_share_x_ic = Vec::<RingElm>::new(); // to store the masked value that is  x[parent]-x[j]+alpha
             for j in rchildren.clone(){
-                let parent = j / 2;
+                
+                let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
                 let alpha = alpha_it.next().expect("No enough alpha to use.");
                 let x_ic = x_diff +  alpha.clone();
@@ -108,7 +121,7 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
         
             let mut x_ics_it = x_ics.iter();  
             for j in  rchildren.clone(){
-                let parent = j / 2;
+                let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
                 let ic_key = ic_key_it.next().expect("No enough ic_key.");
                 let x_ic = x_ics_it.next().expect("No enough x_ic.");
@@ -123,10 +136,10 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
             let msg_beavers = p.netlayer.exchange_ring_vec(msg_share_beaver).await;
             let mut mul_index= 0;
             for j in rchildren.clone(){
-                let parent = j / 2;
+                let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let mul_result = my_beavers[mul_index].mul_compute(is_server, &msg_beavers[mul_index*2] ,&msg_beavers[mul_index*2+1]);
                 mul_index += 1;
-                let max_of_two = x_share[parent] - mul_result;
+                let max_of_two = x_share[j] + mul_result;
                 let sum_of_two = x_share[parent] + x_share[j];
                 x_share[parent] = max_of_two;
                 x_share[j] = sum_of_two - max_of_two;
@@ -137,8 +150,8 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
         /*******************************START: COMPARE THE LEFT CHILDREN TO THEIR PARENT*******************************************/
         let handle_lchildren = {
             let mut msg_share_x_ic = Vec::<RingElm>::new(); // to store the masked value that is  x[parent]-x[j]+alpha
-            for j in rchildren.clone(){
-                let parent = j / 2;
+            for j in lchildren.clone(){
+                let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
                 let alpha = alpha_it.next().expect("No enough alpha to use.");
                 let x_ic = x_diff +  alpha.clone();
@@ -151,8 +164,8 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
             let mut msg_share_beaver = Vec::<RingElm>::new();
         
             let mut x_ics_it = x_ics.iter();  
-            for j in  rchildren.clone(){
-                let parent = j / 2;
+            for j in  lchildren.clone(){
+                let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
                 let ic_key = ic_key_it.next().expect("No enough ic_key.");
                 let x_ic = x_ics_it.next().expect("No enough x_ic.");
@@ -166,19 +179,24 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
 
             let msg_beavers = p.netlayer.exchange_ring_vec(msg_share_beaver).await;
             let mut mul_index= 0;
-            for j in rchildren.clone(){
-                let parent = j / 2;
+            for j in lchildren.clone(){
+                let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let mul_result = my_beavers[mul_index].mul_compute(is_server, &msg_beavers[mul_index*2] ,&msg_beavers[mul_index*2+1]);
                 mul_index += 1;
-                let max_of_two = x_share[parent] - mul_result;
-                let sum_of_two = x_share[parent] + x_share[j];
+                let max_of_two = x_share[j] + mul_result;
+                let sum_of_two = x_share[parent] + x_share[j]; //fixed a mistake
                 x_share[parent] = max_of_two;
                 x_share[j] = sum_of_two - max_of_two;
             }
         };
         /*******************************END: COMPARE THE LEFT CHILDREN TO THEIR PARENT*********************************************/
         end_index = start_index - 1;
-        start_index = 2 << i - 1;
+        start_index = (1 << (i - 1)) - 1;
+
+        /*Start: Debug info */
+        let x_layer = p.netlayer.exchange_ring_vec(x_share.clone()).await;
+        println!("layer{}:{:?}", i, x_layer);
+        /*End:   Debug info */
     }
     return x_share[0];
 }

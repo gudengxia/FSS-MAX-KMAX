@@ -55,7 +55,8 @@ async fn main(){
         let r = rng.gen_range(1..50) as u32;
         x_share.push(RingElm::from(r));
     }
-    println!("x_share={:?}", x_share);
+    //println!("x_share={:?}", x_share);
+
     let index =  if is_server {String::from("0")} else {String::from("1")};
 
     let netlayer = NetInterface::new(is_server, "127.0.0.1:8088").await;
@@ -66,7 +67,8 @@ async fn main(){
     let mut p = MPCParty::<MaxOffline_IC>::new(offlinedata, netlayer);
     p.setup(6, INPUT_BITS);
     let result = max_ic(&mut p, &x_share).await;
-    println!("max_share={:?}", max=);
+    let result = heapify(&mut p, &mut x_share).await;
+    //println!("max_share={:?}", result);
 }
 
 

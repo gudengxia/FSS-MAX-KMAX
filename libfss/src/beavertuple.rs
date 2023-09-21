@@ -1,3 +1,4 @@
+/*Add two interfaces to perfrom multilication: fzhang, update0920*/
 use crate::prg::PrgSeed;
 use crate::prg::FixedKeyPrgStream;
 use crate::bits_to_u32;
