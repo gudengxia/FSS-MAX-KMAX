@@ -26,11 +26,11 @@ impl MaxOffline_IC{
         let (p_bound,q_bound) = (RingElm::zero(), RingElm::from((1<<31)-1));
         let mut alpha0 = Vec::<RingElm>::new();
         let mut alpha1 = Vec::<RingElm>::new();
-        let mut ic_key_0 = Vec::<ICKey>::new();
-        let mut ic_key_1 = Vec::<ICKey>::new();
+        let mut ic_key_0 = Vec::<ICCKey>::new();
+        let mut ic_key_1 = Vec::<ICCKey>::new();
         for _ in 0..ic_key_size{
             let alpha_bits = stream.next_bits(NUMERIC_LEN);
-            let (key0, key1) = ICKey::gen(&alpha_bits,&p_bound, &q_bound);
+            let (key0, key1) = ICCKey::gen(&alpha_bits,&p_bound, &q_bound);
             ic_key_0.push(key0);
             ic_key_1.push(key1);
             let alpha_bits_share = stream.next_bits(NUMERIC_LEN);
@@ -115,8 +115,60 @@ impl MaxOffline_IC{
 #[cfg(test)]
 mod test{
     use super::*;
+    use fss::{prg::*, RingElm};
     #[test]
     fn gen_data(){
-        
+        const INPUT_SIZE: usize = 6;
+        //const INPUT_BITS: usize = 32;
+        let (p_bound,q_bound) = (RingElm::zero(), RingElm::from((1<<31)-1));
+        let seed = PrgSeed::zero();//Guarantee same input bits to ease the debug process
+        let mut stream = FixedKeyPrgStream::new();
+        stream.set_key(&seed.key);
+
+        MaxOffline_IC::genData(&mut stream, INPUT_SIZE, INPUT_SIZE);
+        let mut offline0 = MaxOffline_IC::new();
+        let mut offline1 = MaxOffline_IC::new();
+        offline0.loadData(&0u8);
+        offline1.loadData(&1u8);
+        for i in 0..INPUT_SIZE{
+            /*let alpha_bits = stream.next_bits(NUMERIC_LEN);
+            let mut alpha_numeric = RingElm::from(bits_to_u32_BE(&alpha_bits));
+            let (key0, key1) = ICCKey::gen(&alpha_bits,&p_bound, &q_bound);*/
+            let key0 = &offline0.ic_key[i];
+            let key1 = &offline1.ic_key[i];
+            let alpha = offline0.alpha[i] + offline1.alpha[i];
+            let x = RingElm::from(200); 
+            let y = RingElm::from(199);
+
+            let r0 = key0.eval(&(x - y + alpha));
+            let r1 = key1.eval(&(x - y + alpha));
+            //println!("r = {:?}", r0 + r1);
+            assert_eq!(r0 + r1, RingElm::from(1));
+        }
+
+    }
+
+    #[test]
+    fn GreaterThan_works()
+    // if x < y, return 0, else return 1; 
+    {
+        let (p_bound,q_bound) = (RingElm::zero(), RingElm::from((1<<31)-1));
+        let seed = PrgSeed::zero();//Guarantee same input bits to ease the debug process
+        let mut stream = FixedKeyPrgStream::new();
+        stream.set_key(&seed.key);
+
+        for _ in 0..100{
+            let alpha_bits = stream.next_bits(NUMERIC_LEN);
+            let mut alpha_numeric = RingElm::from(bits_to_u32_BE(&alpha_bits));
+            let (key0, key1) = ICCKey::gen(&alpha_bits,&p_bound, &q_bound);
+
+            let x = RingElm::from(189); 
+            let y = RingElm::from(199);
+
+            let r0 = key0.eval(&(x - y + alpha_numeric));
+            let r1 = key1.eval(&(x - y + alpha_numeric));
+            //println!("r = {:?}", r0 + r1);
+            assert_eq!(r0 + r1, RingElm::from(0));
+        }
     }
 }

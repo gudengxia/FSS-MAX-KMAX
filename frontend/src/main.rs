@@ -1,5 +1,7 @@
 use libmpc::mpc_party::MPCParty;
+use libmpc::offline_data::offline_ic_max::MaxOffline_IC;
 use libmpc::protocols::bitwise_kre::*;
+use libmpc::protocols::max_ic_proto::*;
 use libmpc::protocols::batch_max_proto::*;
 use libmpc::mpc_platform::NetInterface;
 use libmpc::offline_data::*;
@@ -8,7 +10,7 @@ use libmpc::offline_data::offline_batch_max::*;
 use std::fs::File;
 use std::io::Write;
 use std::env;
-
+use rand::Rng;
 pub const TEST_BITWISE_MAX: bool = false;
 pub const TEST_BATCH_MAX: bool = false;
 pub const TEST_BITWISE_KRE: bool = true;
@@ -16,14 +18,60 @@ pub const TEST_BATCH_KRE: bool = false;
 // pub const TEST_SIMULATE_NETWORK: bool = false;
 // pub const TEST_REAL_NETWORK: bool = false;
 
-const INPUT_SIZE: usize = 10000usize;
+const INPUT_SIZE: usize = 6usize;
 const INPUT_BITS: usize = 32usize;
 const BATCH_SIZE: usize = 4usize;
 
 const K_GLOBAL: u32 = 1;
 
 #[tokio::main]
-async fn main() {
+async fn main(){
+    let mut is_server=false;
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        // The first command-line argument (index 1) is accessed using args[1]
+        let first_argument = args[1].parse::<u8>();
+
+        // Check if the parsing was successful
+        match first_argument {
+            Ok(value) => {
+                match value{
+                    0 => is_server = true,
+                    1 => {},
+                    _ => eprintln!("Error: Party role illegale"),
+                }
+            }
+            Err(_) => {
+                eprintln!("Error: Unable to parse the first argument as a u8 value.");
+            }
+        }
+    } else {
+        eprintln!("No arguments provided.");
+    }
+    let mut rng = rand::thread_rng();
+    let mut x_share = Vec::<RingElm>::new();
+    for i in 0..6{
+        let r = rng.gen_range(1..50) as u32;
+        x_share.push(RingElm::from(r));
+    }
+    println!("x_share={:?}", x_share);
+    let index =  if is_server {String::from("0")} else {String::from("1")};
+
+    let netlayer = NetInterface::new(is_server, "127.0.0.1:8088").await;
+
+    let mut offlinedata = MaxOffline_IC::new();
+    offlinedata.loadData(if is_server{&0u8} else {&1u8});
+
+    let mut p = MPCParty::<MaxOffline_IC>::new(offlinedata, netlayer);
+    p.setup(6, INPUT_BITS);
+    let result = max_ic(&mut p, &x_share).await;
+    println!("max_share={:?}", max=);
+}
+
+
+#[tokio::main]
+async fn main_for_batch_max() {
     let mut is_server=false;
 
     let args: Vec<String> = env::args().collect();

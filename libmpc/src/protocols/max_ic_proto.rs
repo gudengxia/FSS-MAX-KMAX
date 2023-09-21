@@ -6,38 +6,42 @@ use fss::{RingElm, beavertuple::BeaverTuple};
 
 pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm{
     let mut x_share = x.clone();
-    let x_len = x_share.len();
+    let mut x_len = x_share.len();  // a bug is fixed here. fzhang, 0921
     let mut t = Vec::<RingElm>::new();
     
     let is_server = p.netlayer.is_server;
     let mut ic_key_it = p.offlinedata.ic_key.iter();
     let mut alpha_it = p.offlinedata.alpha.iter();
     let mut beaver_it = p.offlinedata.beavers.iter();
-    
+    /*Start: Debug info */
+    //let x_org = p.netlayer.exchange_ring_vec(x.clone()).await;
+    //println!("[{:?}]", x_org);
+    /*End:   Debug info */
     while x_len > 1{
+       
         t.clear();
-        /**************************************START COMPUTE LESSTHAN****************************/
+        /**************************************START COMPUTE GREATERTHAN****************************/
         let mut msg_share_x_ic = Vec::<RingElm>::new(); // to store the masked value that is  x[i*2]-x[i*2+1]+alpha
         for i in 0..x_len/2{
-            let x_diff = x_share[i*2] - x_share[i*2+1];
+            let x_diff = x_share[i*2] - x_share[i*2 + 1];
             let alpha = alpha_it.next().expect("No enough alpha to use.");
             let x_ic = x_diff +  alpha.clone();
             msg_share_x_ic.push(x_ic);
         } // prepare the message to exchange
         
-        let x_ics = p.netlayer.exchange_ring_vec(msg_share_x_ic).await; // exchange (x[i*2]-x[i*2+1]) to get n/2 points for LessThan function
+        let x_ics = p.netlayer.exchange_ring_vec(msg_share_x_ic).await; // exchange (x[i*2]-x[i*2+1] + alpha) to get n/2 points for GreaterThan function
         
-        //compute n/2 x-b*(x-y), where b is the eval result of the LessThen function. It needs to exchange beaver tuples
+        //compute n/2 y+b*(x-y), where b is the eval result of the GReaterThan function. It needs to exchange beaver tuples
         let mut my_beavers = Vec::<BeaverTuple>::new(); // to store n/2 beaver tuples for multiplications
         let mut msg_share_beaver = Vec::<RingElm>::new(); 
         for i in 0..x_len/2{
-            let x_diff = x_share[i*2] - x_share[i*2+1];
+            let x_diff = x_share[i*2] - x_share[i*2 + 1];
             let ic_key = ic_key_it.next().expect("No enough ic_key.");
-            let y_ic = ic_key.eval(&x_ics[i]);
+            let y_ic = ic_key.eval(&x_ics[i]); //GreaterThan 
             let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
-            let half_beaver = beaver.mul_open(y_ic, x_diff);
-            msg_share_beaver.push(half_beaver.0);
-            msg_share_beaver.push(half_beaver.1);
+            let open_value = beaver.mul_open(y_ic, x_diff);
+            msg_share_beaver.push(open_value.0);
+            msg_share_beaver.push(open_value.1);
             my_beavers.push(beaver);
         } 
         
@@ -45,10 +49,10 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
 
         for i in 0..x_len/2{
             let mul_result = my_beavers[i].mul_compute(is_server, &msg_beavers[i*2], &msg_beavers[i*2+1]);
-            let max_of_two = x_share[i*2] - mul_result;
+            let max_of_two = x_share[i*2+1] + mul_result;
             t.push(max_of_two); 
         }
-        /**************************************END   COMPUTE LESSTHAN****************************/    
+        /**************************************END   COMPUTE GREATERTHAN****************************/    
         
         // deal with the last element if x_len is odd
         if x_len & 0x1usize == 1{
@@ -58,6 +62,11 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
         //update x_share
         x_share.clear();
         x_share.extend(t.clone());
+        x_len = x_share.len();  //an important bug is fixed here. fzhang, 0921
+         /*Start: Debug info */
+         let x_layer = p.netlayer.exchange_ring_vec(x_share.clone()).await;
+         println!("[{:?}]", x_layer);
+        /*End:   Debug info */
     }
     x_share[0]  
 }
