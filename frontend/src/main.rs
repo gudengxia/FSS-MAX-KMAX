@@ -18,7 +18,7 @@ pub const TEST_BATCH_KRE: bool = false;
 // pub const TEST_SIMULATE_NETWORK: bool = false;
 // pub const TEST_REAL_NETWORK: bool = false;
 
-const INPUT_SIZE: usize = 6usize;
+const INPUT_SIZE: usize = 10usize;
 const INPUT_BITS: usize = 32usize;
 const BATCH_SIZE: usize = 4usize;
 
@@ -62,7 +62,7 @@ async fn main(){
     let netlayer = NetInterface::new(is_server, "127.0.0.1:8088").await;
 
     let mut offlinedata = MaxOffline_IC::new();
-    offlinedata.loadData(if is_server{&0u8} else {&1u8});
+    offlinedata.loadData(if is_server{&0u8} else {&1u8}, false);
 
     let mut p = MPCParty::<MaxOffline_IC>::new(offlinedata, netlayer);
     p.setup(6, INPUT_BITS);

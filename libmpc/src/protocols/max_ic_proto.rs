@@ -11,7 +11,7 @@ pub async fn max_ic(p: &mut MPCParty<MaxOffline_IC>, x: &Vec<RingElm>) ->RingElm
     
     let is_server = p.netlayer.is_server;
     let mut ic_key_it = p.offlinedata.ic_key.iter();
-    let mut alpha_it = p.offlinedata.alpha.iter();
+    let mut alpha_it = p.offlinedata.ic_alpha.iter();
     let mut beaver_it = p.offlinedata.beavers.iter();
     /*Start: Debug info */
     let x_org = p.netlayer.exchange_ring_vec(x.clone()).await;
@@ -82,9 +82,9 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
     println!("start:{:?}", x_org);
     /*End:   Debug info */
     let is_server = p.netlayer.is_server;
-    let mut ic_key_it = p.offlinedata.ic_key.iter();
-    let mut alpha_it = p.offlinedata.alpha.iter();
-    let mut beaver_it = p.offlinedata.beavers.iter();
+    /*let mut ic_key_it = p.offlinedata.ic_key.iter();
+    let mut alpha_it = p.offlinedata.ic_alpha.iter();
+    let mut beaver_it = p.offlinedata.beavers.iter();*/
     let h = ((x_len+1) as f64).log(2 as f64).ceil() as usize; //the depth of the logic tree that has x_len nodes   
     let mut start_index = (1 << (h-1)) - 1; //the start index of the nodes to be handled
     let mut end_index = x_len - 1;  //the end index of the nodes to be handled
@@ -109,7 +109,8 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
                 
                 let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
-                let alpha = alpha_it.next().expect("No enough alpha to use.");
+                //let alpha = alpha_it.next().expect("No enough alpha to use."); 
+                let alpha = p.offlinedata.ic_alpha.pop().unwrap(); //update 0922
                 let x_ic = x_diff +  alpha.clone();
                 msg_share_x_ic.push(x_ic);
             }
@@ -123,10 +124,12 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
             for j in  rchildren.clone(){
                 let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
-                let ic_key = ic_key_it.next().expect("No enough ic_key.");
+                //let ic_key = ic_key_it.next().expect("No enough ic_key.");
+                let ic_key = p.offlinedata.ic_key.pop().expect("No enough ic_key.");  //update0922,fzhang
                 let x_ic = x_ics_it.next().expect("No enough x_ic.");
                 let y_ic = ic_key.eval(x_ic);
-                let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
+                //let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
+                let mut beaver = p.offlinedata.beavers.pop().expect("No enough beaver tuple."); //update0922,fzhang
                 let half_beaver = beaver.mul_open(y_ic, x_diff);
                 msg_share_beaver.push(half_beaver.0);
                 msg_share_beaver.push(half_beaver.1);
@@ -153,7 +156,8 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
             for j in lchildren.clone(){
                 let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
-                let alpha = alpha_it.next().expect("No enough alpha to use.");
+                //let alpha = alpha_it.next().expect("No enough alpha to use.");
+                let alpha = p.offlinedata.ic_alpha.pop().expect("No enough ic_alpha."); //update0922,fzhang
                 let x_ic = x_diff +  alpha.clone();
                 msg_share_x_ic.push(x_ic);
             }
@@ -167,10 +171,12 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
             for j in  lchildren.clone(){
                 let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
                 let x_diff = x_share[parent] - x_share[j];
-                let ic_key = ic_key_it.next().expect("No enough ic_key.");
+                //let ic_key = ic_key_it.next().expect("No enough ic_key.");
+                let ic_key = p.offlinedata.ic_key.pop().expect("No enough ic_key."); //update0922,fzhang
                 let x_ic = x_ics_it.next().expect("No enough x_ic.");
                 let y_ic = ic_key.eval(x_ic);
-                let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
+                //let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
+                let mut beaver = p.offlinedata.beavers.pop().expect("No enough beaver tuple."); //update0922,fzhang
                 let half_beaver = beaver.mul_open(y_ic, x_diff);
                 msg_share_beaver.push(half_beaver.0);
                 msg_share_beaver.push(half_beaver.1);
@@ -199,4 +205,10 @@ pub async fn heapify(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>
         /*End:   Debug info */
     }
     return x_share[0];
+}
+
+pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingElm>)
+{
+    let offlinedatazc_alpha = p.offlinedata.clone();
+
 }
