@@ -1,3 +1,5 @@
+use fss::RingElm;
+
 use crate::mpc_platform::*;
 pub struct MPCParty<T>{
     // offlinedata: BitMaxOffline,

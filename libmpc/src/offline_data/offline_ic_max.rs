@@ -179,7 +179,7 @@ mod test{
         let mut stream = FixedKeyPrgStream::new();
         stream.set_key(&seed.key);
 
-        MaxOffline_IC::genData(&mut stream, INPUT_SIZE, INPUT_SIZE, 0);
+        MaxOffline_IC::genData(&mut stream, INPUT_SIZE*(INPUT_SIZE)*2, INPUT_SIZE*(INPUT_SIZE)*2, 0);
         let mut offline0 = MaxOffline_IC::new();
         let mut offline1 = MaxOffline_IC::new();
         offline0.loadData(&0u8, false);

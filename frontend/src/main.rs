@@ -51,7 +51,7 @@ async fn main(){
     }
     let mut rng = rand::thread_rng();
     let mut x_share = Vec::<RingElm>::new();
-    for i in 0..6{
+    for i in 0..INPUT_SIZE{
         let r = rng.gen_range(1..50) as u32;
         x_share.push(RingElm::from(r));
     }
@@ -65,9 +65,9 @@ async fn main(){
     offlinedata.loadData(if is_server{&0u8} else {&1u8}, false);
 
     let mut p = MPCParty::<MaxOffline_IC>::new(offlinedata, netlayer);
-    p.setup(6, INPUT_BITS);
-    let result = max_ic(&mut p, &x_share).await;
-    let result = heapify(&mut p, &mut x_share).await;
+    p.setup(INPUT_SIZE, INPUT_BITS);
+    //let result = max_ic(&mut p, &x_share).await;
+    let result = heap_sort(&mut p, &mut x_share).await;
     //println!("max_share={:?}", result);
 }
 
