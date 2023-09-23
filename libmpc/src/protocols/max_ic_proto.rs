@@ -1,6 +1,6 @@
-use std::{f64::consts::LOG2_10, rc};
-
-use crate::offline_data::offline_ic_max::MaxOffline_IC;
+//use std::{f64::consts::LOG2_10, rc};
+use fss::u32_to_bits;
+use crate::{offline_data::offline_ic_max::MaxOffline_IC, mpc_platform::NetInterface};
 use super::super::mpc_party::*;
 use fss::{RingElm, beavertuple::BeaverTuple};
 
@@ -222,9 +222,9 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
         let mut start_index = (1 << (h-1)) - 1; //the start index of the nodes to be handled
         let mut end_index = x_len - 1;  //the end index of the nodes to be handled
         println!("****************start heapify**********************");
-        println!("start_index = {}, end_index = {}", start_index, end_index);
+        //println!("start_index = {}, end_index = {}", start_index, end_index);
         for i in (1..h).rev(){
-            println!("h = {}, start_index = {}, end_index = {}", i, start_index, end_index);
+            //println!("h = {}, start_index = {}, end_index = {}", i, start_index, end_index);
             let mut lchildren = Vec::<usize>::new();
             let mut rchildren = Vec::<usize>::new();
             for j in start_index..=end_index{
@@ -238,7 +238,7 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
         
             /*******************************START: COMPARE THE RIGHT CHILDREN TO THEIR PARENT****************************************/
             if !rchildren.is_empty(){
-                println!("handel {:?}", rchildren);
+                //println!("handel {:?}", rchildren);
                 let mut msg_share_x_ic = Vec::<RingElm>::new(); // to store the masked value that is  x[parent]-x[j]+alpha
                 for j in rchildren.clone(){  //rchild from lchild
                     
@@ -261,6 +261,7 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
                     let x_diff = x_share[parent] - x_share[j];
                     //let ic_key = ic_key_it.next().expect("No enough ic_key.");
                     let ic_key = p.offlinedata.ic_key.pop().expect("No enough ic_key.");  //update0922,fzhang
+                    
                     let x_ic = x_ics_it.next().expect("No enough x_ic.");
                     let y_ic = ic_key.eval(x_ic);
                     //let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
@@ -287,7 +288,7 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
 
             /*******************************START: COMPARE THE LEFT CHILDREN TO THEIR PARENT*******************************************/
             if !lchildren.is_empty(){
-                println!("handel {:?}", lchildren);
+                //println!("handel {:?}", lchildren);
                 let mut msg_share_x_ic = Vec::<RingElm>::new(); // to store the masked value that is  x[parent]-x[j]+alpha
                 for j in lchildren.clone(){
                     let parent = (j+1) / 2 - 1; //fixed the way to compute the parent's index. fzhang, 0921
@@ -309,6 +310,7 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
                     let x_diff = x_share[parent] - x_share[j];
                     //let ic_key = ic_key_it.next().expect("No enough ic_key.");
                     let ic_key = p.offlinedata.ic_key.pop().expect("No enough ic_key."); //update0922,fzhang
+                    
                     let x_ic = x_ics_it.next().expect("No enough x_ic.");
                     let y_ic = ic_key.eval(x_ic);
                     //let mut beaver = beaver_it.next().expect("No enough beaver tuple.").clone();
@@ -335,10 +337,7 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
             end_index = start_index - 1;
             start_index = (1 << (i - 1)) - 1;
         }
-         /*Start: Debug info */
-         let x_layer = p.netlayer.exchange_ring_vec(x_share.clone()).await;
-         println!("sort_i{:?}", x_layer);
-         /*End:   Debug info */
+         
         /*****************************************************************************************************************************/
         // update after each heapify call
         //1. swap the x_share[0] and x_share[x_len], then put the max to the end of the list
@@ -346,6 +345,98 @@ pub async fn heap_sort(p: &mut MPCParty<MaxOffline_IC>, x_share: &mut Vec<RingEl
             x_share[0] = x_share[x_len - 1];
             x_share[x_len-1] = temp_elem; 
         /*****************************************************************************************************************************/
-         println!("****************end   heapify**********************");
+        /*Start: Debug info */
+        let x_layer = p.netlayer.exchange_ring_vec(x_share.clone()).await;
+        println!("sort_i{:?}", x_layer);
+        println!("****************end  heapify**********************");
+        /*End:   Debug info */
     }
+}
+
+//assume x_share is in incremental order already. This function is to extract the k-th maxium value
+pub async fn extract_kmax(p: &mut MPCParty<MaxOffline_IC>, x_share: &Vec<RingElm>, k_share: RingElm) -> RingElm{
+    let is_server = p.netlayer.is_server;
+    let x_len = x_share.len();
+    /************************************START: step1 prepare auxiliary array y_share ************************************************/
+    let mut y_share = vec![RingElm::from(0); x_len];
+    if(is_server){
+        for i in  0..x_len{
+            y_share[i] = RingElm::from((x_len - i) as u32) - k_share;
+        }
+    }
+    /************************************END:step1 prepare auxiliary array y_share ***************************************************/
+
+    /************************************START: step2 z_share = x_share times y_share and check z ?= 0 *******************************/
+    let mut xmsg_for_beaver_share = Vec::<RingElm>::new();
+    let mut my_beavers = Vec::<BeaverTuple>::new();
+    
+    for i in 0..x_len{
+        let mut beaver = p.offlinedata.beavers.pop().expect("No enough beavers.");
+        let half_beaver = beaver.mul_open(x_share[i].clone(), y_share[i]);
+        my_beavers.push(beaver);
+        xmsg_for_beaver_share.push(half_beaver.0); //the 1st element
+        xmsg_for_beaver_share.push(half_beaver.1); //the 2nd element
+    }
+    
+    let xmsg_for_beaver = p.netlayer.exchange_ring_vec(xmsg_for_beaver_share).await;
+    
+    let mut z_share = Vec::<RingElm>::new();
+    for i in 0..x_len{
+        let z_share_i = my_beavers[i].mul_compute(is_server, &xmsg_for_beaver[2*i], &xmsg_for_beaver[2*i+1]);
+        z_share.push(z_share_i);
+    } 
+    /************************************END:   step2 z_share = x_share times y_share and check z ?= 0 *******************************/
+    
+    /************************************START: step3 check z ?= 0 *******************************************************************/
+    let mut xmsg_for_zc_share = Vec::<RingElm>::new();
+    
+    for i in 0..x_len{ 
+        //let key_zc = p.offlinedata.zc_key.pop().expect("No enough zc_key.");
+        let alpha_zc = p.offlinedata.zc_alpha.pop().expect("No enough zc_alpha");
+        let x_zc = z_share[i] + alpha_zc;
+        xmsg_for_zc_share.push(x_zc);  //the first element
+    }
+
+    let xmsg_for_zc = p.netlayer.exchange_ring_vec(xmsg_for_zc_share).await;
+
+    let mut z_share = Vec::<RingElm>::new();
+    for i in 0..x_len{
+        let key_zc = p.offlinedata.zc_key.pop().expect("No enough zc_key.");
+        let x_zc = xmsg_for_zc[i];
+        let mut vec_eval = vec![false;32usize];
+        let num_eval = x_zc.to_u32();
+        match num_eval {
+            Some(numeric) => vec_eval = u32_to_bits(32usize,numeric),
+            None      => println!( "u32 Conversion failed!!" ),
+        }
+        let y_zc = key_zc.eval(&vec_eval);
+        z_share.push(y_zc);
+    }
+    /************************************END:   step3: check z ?= 0*******************************************************************/
+
+    /************************************START: step4 compute the inner product of x_share and z_share********************************/
+    let mut my_beaver_for_inner_product = Vec::<BeaverTuple>::new();
+    let mut xmsg_for_inner_product_share = Vec::<RingElm>::new();
+    for i in 0..x_len{
+        let mut beaver = p.offlinedata.beavers.pop().expect("No enough beaver tuples.");
+        let half_beaver = beaver.mul_open(x_share[i].clone(), z_share[i]);
+        xmsg_for_inner_product_share.push(half_beaver.0);
+        xmsg_for_inner_product_share.push(half_beaver.1);
+        my_beaver_for_inner_product.push(beaver);
+    }
+
+    let xmsg_for_inner_product = p.netlayer.exchange_ring_vec(xmsg_for_inner_product_share).await;
+
+    let mut kmax_share = RingElm::from(0);
+    for i in 0..x_len{
+        let k_max_share_i = my_beaver_for_inner_product[i].mul_compute(is_server, &xmsg_for_inner_product[i*2], &xmsg_for_inner_product[i*2+1]);
+        kmax_share = kmax_share + k_max_share_i;
+    }
+    /************************************START: step4 compute the inner product of x_share and z_share********************************/
+    /***************************Debug Info ****************************/
+    let msg_kmax_share = [kmax_share].to_vec();
+    let msg_kmax = p.netlayer.exchange_ring_vec(msg_kmax_share).await;
+    println!("kmax={:?}", msg_kmax);
+    /***************************Debug Info ****************************/
+    kmax_share
 }

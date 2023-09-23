@@ -21,7 +21,7 @@ pub const TEST_BATCH_KRE: bool = false;
 const INPUT_SIZE: usize = 10usize;
 const INPUT_BITS: usize = 32usize;
 const BATCH_SIZE: usize = 4usize;
-
+const K_VALUE:u32 = 3;
 const K_GLOBAL: u32 = 1;
 
 #[tokio::main]
@@ -58,17 +58,18 @@ async fn main(){
     //println!("x_share={:?}", x_share);
 
     let index =  if is_server {String::from("0")} else {String::from("1")};
-
+    let k_share = if is_server{RingElm::from(K_VALUE)} else{RingElm::from(0)};
     let netlayer = NetInterface::new(is_server, "127.0.0.1:8088").await;
 
     let mut offlinedata = MaxOffline_IC::new();
-    offlinedata.loadData(if is_server{&0u8} else {&1u8}, false);
+    offlinedata.loadData(if is_server{&0u8} else {&1u8}, true); // if kmax, true
 
     let mut p = MPCParty::<MaxOffline_IC>::new(offlinedata, netlayer);
     p.setup(INPUT_SIZE, INPUT_BITS);
     //let result = max_ic(&mut p, &x_share).await;
     let result = heap_sort(&mut p, &mut x_share).await;
-    //println!("max_share={:?}", result);
+    let kmax_share = extract_kmax(&mut p, &x_share, k_share).await;
+
 }
 
 

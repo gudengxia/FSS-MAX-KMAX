@@ -102,7 +102,7 @@ impl MaxOffline_IC{
         write_file("../data/beaver0.bin", &beavertuples0);
         write_file("../data/beaver1.bin", &beavertuples1);
 
-        if zc_key_size > 0 {
+        if zc_key_size > 0 { //
             let mut zero_dpf_0: Vec<DPFKey<RingElm>> = Vec::new();
             let mut zero_dpf_1: Vec<DPFKey<RingElm>> = Vec::new();
 
@@ -171,7 +171,7 @@ mod test{
     use fss::{prg::*, RingElm};
     use fss::u32_to_bits;
     #[test]
-    fn gen_data(){
+    fn gen_data_for_max_ic(){
         const INPUT_SIZE: usize = 10;
         //const INPUT_BITS: usize = 32;
         let (p_bound,q_bound) = (RingElm::zero(), RingElm::from((1<<31)-1));
@@ -179,7 +179,7 @@ mod test{
         let mut stream = FixedKeyPrgStream::new();
         stream.set_key(&seed.key);
 
-        MaxOffline_IC::genData(&mut stream, INPUT_SIZE*(INPUT_SIZE)*2, INPUT_SIZE*(INPUT_SIZE)*2, 0);
+        MaxOffline_IC::genData(&mut stream, INPUT_SIZE*(INPUT_SIZE - 1) / 2 , INPUT_SIZE * (INPUT_SIZE-1) / 2 + 2 * INPUT_SIZE, INPUT_SIZE);
         let mut offline0 = MaxOffline_IC::new();
         let mut offline1 = MaxOffline_IC::new();
         offline0.loadData(&0u8, false);
