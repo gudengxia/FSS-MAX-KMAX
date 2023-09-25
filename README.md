@@ -1,5 +1,7 @@
 This project is a fork from https://github.com/zevenblade/FSS-MAX, and contributes to securely compute the max value and the k-th max value of an array that is shared between two parties.
  
+This project assumes k_share is an arithmetical share between the two parties. And in the test mod in frontend/src/main, run gen_data_for_max_ic() to generate the offline data. Then, run heap_sort to sort the x_share in an incremental order, then run kmax_ic() to get the k-th max value. 
+
 # MPC
 This project is to perform secure computation for the maximum/k^{th} ranking element from a secret set.
 

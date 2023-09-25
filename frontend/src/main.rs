@@ -21,7 +21,7 @@ pub const TEST_BATCH_KRE: bool = false;
 const INPUT_SIZE: usize = 10usize;
 const INPUT_BITS: usize = 32usize;
 const BATCH_SIZE: usize = 4usize;
-const K_VALUE:u32 = 3;
+const K_VALUE:u32 = 7;
 const K_GLOBAL: u32 = 1;
 
 #[tokio::main]
@@ -243,7 +243,27 @@ mod test
         assert_eq!(kre, r);
     }
 
+
     #[test]
+    fn gen_data_for_max_ic(){
+        const INPUT_SIZE: usize = 10;
+        //const INPUT_BITS: usize = 32;
+        let (p_bound,q_bound) = (RingElm::zero(), RingElm::from((1<<31)-1));
+        let seed = PrgSeed::zero();//Guarantee same input bits to ease the debug process
+        let mut stream = FixedKeyPrgStream::new();
+        stream.set_key(&seed.key);
+
+        MaxOffline_IC::genData(&mut stream, INPUT_SIZE*(INPUT_SIZE - 1) / 2 , INPUT_SIZE * (INPUT_SIZE-1) / 2 + 2 * INPUT_SIZE, INPUT_SIZE);
+        let mut offline0 = MaxOffline_IC::new();
+        let mut offline1 = MaxOffline_IC::new();
+        //offline0.loadData(&0u8, false);
+        //offline1.loadData(&1u8, false);
+    }
+
+    #[test]
+    
+    
+    #[test]    
     fn batch_kre_gen_offlinedata(){
         let input_size = INPUT_SIZE;
         let input_bits = INPUT_BITS;
